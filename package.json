@@ -1,0 +1,11 @@
+{
+  "name": "eocashloaszw",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "build": "echo \"no frontend build step\""
+  }
+}
