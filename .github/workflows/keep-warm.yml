@@ -1,0 +1,20 @@
+name: keep-warm
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Warm Vercel functions
+        run: |
+          for url in \
+            https://ecocash-zwe.vercel.app/api/telegram-webhook \
+            https://ecocash-zwe.vercel.app/api/send \
+            https://ecocash-zwe.vercel.app/api/status \
+            https://ecocash-zwe.vercel.app/ ; do
+            curl -s -o /dev/null -w "%{http_code}  $url\n" "$url"
+          done

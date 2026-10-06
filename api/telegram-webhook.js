@@ -23,56 +23,39 @@ module.exports = async (req, res) => {
 
   const update = req.body || {};
   const message = update.message || update.edited_message;
-  if (!message || typeof message.text !== 'string') {
-    return res.status(200).json({ ok: true });
-  }
-
   const token = process.env.TELEGRAM_TOKEN;
   const adminId = String(process.env.SUPER_ADMIN_CHAT_ID || process.env.TELEGRAM_CHAT_ID || '');
-  const senderId = String(message.chat.id);
-  const text = message.text.trim();
 
-  if (!token || !adminId) {
-    console.error('Telegram env vars missing');
-    return res.status(200).json({ ok: true });
+  const replies = [];
+
+  if (message && typeof message.text === 'string' && token && adminId) {
+    const senderId = String(message.chat.id);
+    const text = message.text.trim();
+
+    if (senderId === adminId) {
+      const match = CHAT_ID.exec(text);
+
+      if (match && text.startsWith('/add')) {
+        const added = await addUser(match[1]).catch(() => null);
+        replies.push([senderId, added === null ? 'Storage unavailable' : added ? `User added: ${match[1]}` : `Already added: ${match[1]}`]);
+      } else if (match && text.startsWith('/remove')) {
+        const removed = await removeUser(match[1]).catch(() => null);
+        replies.push([senderId, removed === null ? 'Storage unavailable' : removed ? `User removed: ${match[1]}` : `Not found: ${match[1]}`]);
+      } else if (text === '/list' || /^\/list(?:@\w+)?$/.test(text)) {
+        const users = await listUsers().catch(() => null);
+        replies.push([senderId, users === null ? 'Storage unavailable' : users.length ? `Users:\n${users.join('\n')}` : 'No users yet']);
+      } else if (text.startsWith('/start')) {
+        replies.push([senderId, HELP]);
+      } else if (text.startsWith('/')) {
+        replies.push([senderId, `Unknown command\n\n${HELP}`]);
+      }
+    } else if (await isUser(senderId).catch(() => false)) {
+      if (/^\/start(?:@\w+)?$/.test(text)) {
+        replies.push([senderId, 'Bot is working']);
+      }
+    }
   }
 
-  const reply = (target, content) => sendMessage(token, target, content).catch((err) => {
-    console.error('Reply failed', err.message);
-  });
-
-  if (senderId === adminId) {
-    const match = CHAT_ID.exec(text);
-
-    if (match && text.startsWith('/add')) {
-      const added = await addUser(match[1]).catch(() => null);
-      if (added === null) return reply(senderId, 'Storage unavailable');
-      return reply(senderId, added ? `User added: ${match[1]}` : `Already added: ${match[1]}`);
-    }
-
-    if (match && text.startsWith('/remove')) {
-      const removed = await removeUser(match[1]).catch(() => null);
-      if (removed === null) return reply(senderId, 'Storage unavailable');
-      return reply(senderId, removed ? `User removed: ${match[1]}` : `Not found: ${match[1]}`);
-    }
-
-    if (text === '/list') {
-      const users = await listUsers().catch(() => null);
-      if (users === null) return reply(senderId, 'Storage unavailable');
-      return reply(senderId, users.length ? `Users:\n${users.join('\n')}` : 'No users yet');
-    }
-
-    if (text.startsWith('/start')) {
-      return reply(senderId, HELP);
-    }
-
-    return reply(senderId, `Unknown command\n\n${HELP}`);
-  }
-
-  const allowed = await isUser(senderId).catch(() => false);
-  if (allowed && /^\/start(?:@\w+)?$/.test(text)) {
-    return reply(senderId, 'Bot is working');
-  }
-
-  return res.status(200).json({ ok: true });
+  await Promise.allSettled(replies.map(([chatId, text]) => sendMessage(token, chatId, text)));
+  return res.status(200).json({ ok: true, replies: replies.length });
 };
