@@ -1,3 +1,5 @@
+const { listUsers } = require('../lib/store');
+
 module.exports = async (req, res) => {
   const env = (name) => Boolean(process.env[name]);
 
@@ -12,7 +14,10 @@ module.exports = async (req, res) => {
       UPSTASH_REDIS_REST_TOKEN: env('UPSTASH_REDIS_REST_TOKEN'),
     },
     webhook: null,
+    redis: null,
   };
+
+  info.redis = await listUsers().then((users) => ({ ok: true, count: users.length })).catch((err) => ({ ok: false, error: err.message }));
 
   const token = process.env.TELEGRAM_TOKEN;
   if (token) {
