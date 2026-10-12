@@ -17,7 +17,9 @@ module.exports = async (req, res) => {
     redis: null,
   };
 
-  info.redis = await listUsers().then((users) => ({ ok: true, count: users.length })).catch((err) => ({ ok: false, error: err.message }));
+  const redact = (m) => String(m).replace(/(rediss?:\/\/)[^@\s]+@/, '$1***@');
+
+  info.redis = await listUsers().then((users) => ({ ok: true, count: users.length })).catch((err) => ({ ok: false, error: redact(err.message) }));
 
   const token = process.env.TELEGRAM_TOKEN;
   if (token) {
