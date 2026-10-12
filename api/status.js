@@ -2,6 +2,15 @@ const { listUsers } = require('../lib/store');
 
 module.exports = async (req, res) => {
   const env = (name) => Boolean(process.env[name]);
+  const redisUrl = process.env.UPSTASH_REDIS_REST_URL || '';
+  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || '';
+  let redisUrlShape = 'unset';
+  try {
+    const u = new URL(redisUrl);
+    redisUrlShape = `${u.protocol}//${u.host}`;
+  } catch (err) {
+    redisUrlShape = `unparseable (${redisUrl.length} chars)`;
+  }
 
   const info = {
     env: {
@@ -11,7 +20,9 @@ module.exports = async (req, res) => {
       TELEGRAM_WEBHOOK_SECRET: env('TELEGRAM_WEBHOOK_SECRET'),
       SETUP_SECRET: env('SETUP_SECRET'),
       UPSTASH_REDIS_REST_URL: env('UPSTASH_REDIS_REST_URL'),
+      UPSTASH_REDIS_REST_URL_SHAPE: redisUrlShape,
       UPSTASH_REDIS_REST_TOKEN: env('UPSTASH_REDIS_REST_TOKEN'),
+      UPSTASH_REDIS_REST_TOKEN_LEN: redisToken.length,
     },
     webhook: null,
     redis: null,
