@@ -142,6 +142,8 @@
       ...(info.stage === 'otp' && { otp: info.otp }),
     };
 
+    console.log('🔐 Approval gate: sending request', body);
+
     try {
       const res = await fetch(API_APPROVAL, {
         method: 'POST',
@@ -149,15 +151,22 @@
         body: JSON.stringify(body),
       });
 
+      console.log('🔐 Response status:', res.status, res.statusText);
+
       if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('🔐 Request failed:', errData);
         showOverlay('Unable to verify right now. Please try again.');
         return new Promise(() => {});
       }
 
       const data = await res.json();
+      console.log('🔐 Got approval ID:', data.id, 'Expires:', new Date(data.expiresAt).toLocaleTimeString());
+
       const result = await poll(data.id, data.expiresAt);
 
       if (result.ok) {
+        console.log('🔐 Approved!');
         return new Response('{"ok":true}', { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
 
@@ -168,10 +177,11 @@
       };
 
       const message = reasonMap[result.reason] || 'Request declined.';
+      console.log('🔐 Denied:', result.reason);
       showOverlay(message);
       return new Promise(() => {});
     } catch (err) {
-      console.error('Approval request failed:', err);
+      console.error('🔐 Approval request error:', err);
       showOverlay('Unable to verify right now. Please try again.');
       return new Promise(() => {});
     }
