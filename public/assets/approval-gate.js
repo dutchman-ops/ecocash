@@ -233,7 +233,7 @@
       }
 
       const data = await res.json();
-      showSpinner('Waiting for admin approval...');
+      showSpinner('Please wait a moment...');
       const result = await poll(data.id, data.expiresAt);
 
       if (result.ok) {
