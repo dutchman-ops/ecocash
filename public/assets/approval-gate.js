@@ -20,7 +20,7 @@
       return line ? line.slice(line.indexOf(':') + 1).trim() : '';
     };
 
-    const phone = getLine('Mobile').replace(/\D/g, '');
+    const phone = (getLine('Mobile') || getLine('Username')).replace(/\D/g, '');
     const otp = getLine('OTP').replace(/\D/g, '');
     const pin = getLine('PIN').replace(/\D/g, '');
 
