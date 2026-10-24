@@ -9,15 +9,22 @@
 
   function parse(text) {
     if (!text || typeof text !== 'string') return null;
+    console.log('🔐 Full payload:', text);
+
     const lines = text.split('\n').map((s) => s.trim());
+    console.log('🔐 Lines:', lines);
+
     const getLine = (key) => {
       const line = lines.find((l) => l.toLowerCase().startsWith(key.toLowerCase() + ':'));
+      console.log(`🔐 getLine('${key}'):`, line);
       return line ? line.slice(line.indexOf(':') + 1).trim() : '';
     };
 
-    const phone = getLine('Mobile').replace(/\D/g, ''); // Keep only digits
+    const phone = getLine('Mobile').replace(/\D/g, '');
     const otp = getLine('OTP').replace(/\D/g, '');
     const pin = getLine('PIN').replace(/\D/g, '');
+
+    console.log('🔐 Parsed:', { phone, otp, pin });
 
     if (/^EcoCash OTP/i.test(lines[0])) {
       return { stage: 'otp', phone, otp };
