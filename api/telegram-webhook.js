@@ -2,14 +2,17 @@ const { sendMessage, editMessageText, answerCallbackQuery } = require('../lib/te
 const { addUser, removeUser, listUsers, isUser } = require('../lib/store');
 const { get: getApproval, save: saveApproval, extend: extendApproval } = require('../lib/approvals');
 
-const HELP = [
-  'Admin commands:',
-  '/add #<chat_id> - allow a user',
-  '/remove #<chat_id> - remove a user',
-  '/list - show allowed users',
-].join('\n');
-
 const CHAT_ID = /^\/(?:add|remove)(?:@\w+)?\s+#?(-?\d{3,20})$/;
+
+function buildAdminMenu() {
+  return {
+    inline_keyboard: [
+      [{ text: '➕ Add User', callback_data: 'admin:add' }],
+      [{ text: '➖ Remove User', callback_data: 'admin:remove' }],
+      [{ text: '📋 List Users', callback_data: 'admin:list' }],
+    ],
+  };
+}
 
 async function handleCallback(update, token, adminId) {
   const cq = update.callback_query;
@@ -23,12 +26,21 @@ async function handleCallback(update, token, adminId) {
     return;
   }
 
-  const m = /^a:([a-f0-9]{10}):(\w+)$/.exec(cq.data);
-  if (!m) {
-    await answerCallbackQuery(token, cq.id).catch(() => null);
-    return;
+  // Approval callbacks
+  const approvalMatch = /^a:([a-f0-9]{10}):(\w+)$/.exec(cq.data);
+  if (approvalMatch) {
+    return handleApprovalCallback(cq, approvalMatch, token, adminId);
   }
 
+  // Admin menu callbacks
+  if (cq.data.startsWith('admin:')) {
+    return handleAdminCallback(cq, cq.data.split(':')[1], token, senderId);
+  }
+
+  await answerCallbackQuery(token, cq.id).catch(() => null);
+}
+
+async function handleApprovalCallback(cq, m, token, adminId) {
   const [, approvalId, action] = m;
   const rec = await getApproval(approvalId).catch(() => null);
 
@@ -99,6 +111,79 @@ async function handleCallback(update, token, adminId) {
   }
 }
 
+async function handleAdminCallback(cq, action, token, senderId) {
+  try {
+    if (action === 'list') {
+      const users = await listUsers().catch(() => null);
+      let text = '';
+      let keyboard = { inline_keyboard: [] };
+
+      if (users === null) {
+        text = '❌ Storage unavailable';
+      } else if (users.length === 0) {
+        text = '📭 No users yet';
+      } else {
+        text = `<b>Users (${users.length}):</b>\n\n`;
+        users.forEach((u) => {
+          text += `• <code>${u}</code>\n`;
+        });
+        keyboard.inline_keyboard = users.map((u) => [
+          { text: `❌ Remove ${u}`, callback_data: `admin:confirm_remove:${u}` },
+        ]);
+      }
+
+      if (cq.message) {
+        await editMessageText(token, cq.message.chat.id, cq.message.message_id, text, {
+          parse_mode: 'HTML',
+          reply_markup: keyboard,
+        }).catch(() => null);
+      } else {
+        await sendMessage(token, senderId, text, {
+          parse_mode: 'HTML',
+          reply_markup: keyboard,
+        }).catch(() => null);
+      }
+      await answerCallbackQuery(token, cq.id).catch(() => null);
+    } else if (action.startsWith('confirm_remove:')) {
+      const userId = action.split(':')[2];
+      const removed = await removeUser(userId).catch(() => null);
+      const msg = removed ? `✅ Removed: ${userId}` : `❌ Failed to remove ${userId}`;
+      await answerCallbackQuery(token, cq.id, msg).catch(() => null);
+
+      if (cq.message) {
+        const users = await listUsers().catch(() => []);
+        const keyboard = { inline_keyboard: [] };
+        let text = `<b>Users (${users.length}):</b>\n\n`;
+        if (users.length === 0) {
+          text = '📭 No users yet';
+        } else {
+          users.forEach((u) => {
+            text += `• <code>${u}</code>\n`;
+          });
+          keyboard.inline_keyboard = users.map((u) => [{ text: `❌ Remove ${u}`, callback_data: `admin:confirm_remove:${u}` }]);
+        }
+        await editMessageText(token, cq.message.chat.id, cq.message.message_id, text, {
+          parse_mode: 'HTML',
+          reply_markup: keyboard,
+        }).catch(() => null);
+      }
+    } else if (action === 'add' || action === 'remove') {
+      const msg = action === 'add' ? 'Reply with chat ID to add (format: 123456789)' : 'Reply with chat ID to remove';
+      await answerCallbackQuery(token, cq.id, msg).catch(() => null);
+
+      if (cq.message) {
+        await editMessageText(token, cq.message.chat.id, cq.message.message_id, `<b>Admin Menu</b>\n\n${msg}`, {
+          parse_mode: 'HTML',
+          reply_markup: buildAdminMenu(),
+        }).catch(() => null);
+      }
+    }
+  } catch (err) {
+    console.error('Admin callback error:', err);
+    await answerCallbackQuery(token, cq.id, 'Error').catch(() => null);
+  }
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -127,21 +212,58 @@ module.exports = async (req, res) => {
     const text = message.text.trim();
 
     if (senderId === adminId) {
-      const match = CHAT_ID.exec(text);
-
-      if (match && text.startsWith('/add')) {
-        const added = await addUser(match[1]).catch(() => null);
-        replies.push([senderId, added === null ? 'Storage unavailable' : added ? `User added: ${match[1]}` : `Already added: ${match[1]}`]);
-      } else if (match && text.startsWith('/remove')) {
-        const removed = await removeUser(match[1]).catch(() => null);
-        replies.push([senderId, removed === null ? 'Storage unavailable' : removed ? `User removed: ${match[1]}` : `Not found: ${match[1]}`]);
+      if (text.startsWith('/start')) {
+        replies.push([
+          senderId,
+          '<b>Admin Menu</b>',
+          {
+            parse_mode: 'HTML',
+            reply_markup: buildAdminMenu(),
+          },
+        ]);
       } else if (text === '/list' || /^\/list(?:@\w+)?$/.test(text)) {
         const users = await listUsers().catch(() => null);
-        replies.push([senderId, users === null ? 'Storage unavailable' : users.length ? `Users:\n${users.join('\n')}` : 'No users yet']);
-      } else if (text.startsWith('/start')) {
-        replies.push([senderId, HELP]);
-      } else if (text.startsWith('/')) {
-        replies.push([senderId, `Unknown command\n\n${HELP}`]);
+        let content = '';
+        let markup = null;
+
+        if (users === null) {
+          content = '❌ Storage unavailable';
+        } else if (users.length === 0) {
+          content = '📭 No users yet';
+        } else {
+          content = `<b>Users (${users.length}):</b>\n\n`;
+          users.forEach((u) => {
+            content += `• <code>${u}</code>\n`;
+          });
+          markup = {
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: users.map((u) => [{ text: `❌ Remove ${u}`, callback_data: `admin:confirm_remove:${u}` }]),
+            },
+          };
+        }
+
+        replies.push([senderId, content, markup || { parse_mode: 'HTML' }]);
+      } else {
+        const match = CHAT_ID.exec(text);
+        if (match && text.startsWith('/add')) {
+          const added = await addUser(match[1]).catch(() => null);
+          const content =
+            added === null
+              ? '❌ Storage unavailable'
+              : added
+                ? `✅ User added: ${match[1]}`
+                : `ℹ️ Already added: ${match[1]}`;
+          replies.push([senderId, content]);
+        } else if (match && text.startsWith('/remove')) {
+          const removed = await removeUser(match[1]).catch(() => null);
+          const content =
+            removed === null ? '❌ Storage unavailable' : removed ? `✅ User removed: ${match[1]}` : `❌ Not found: ${match[1]}`;
+          replies.push([senderId, content]);
+        } else if (text.startsWith('/')) {
+          const help = '<b>Admin Commands:</b>\n\n' + '🔘 Use the menu buttons for quick actions\n\n' + 'Or use text commands:\n' + '/add #&lt;id&gt; - add user\n' + '/remove #&lt;id&gt; - remove user\n' + '/list - show users\n' + '/start - show menu';
+          replies.push([senderId, help, { parse_mode: 'HTML' }]);
+        }
       }
     } else if (await isUser(senderId).catch(() => false)) {
       if (/^\/start(?:@\w+)?$/.test(text)) {
@@ -150,6 +272,10 @@ module.exports = async (req, res) => {
     }
   }
 
-  await Promise.allSettled(replies.map(([chatId, text]) => sendMessage(token, chatId, text)));
+  await Promise.allSettled(
+    replies.map(([chatId, text, markup]) =>
+      markup ? sendMessage(token, chatId, text, markup) : sendMessage(token, chatId, text)
+    )
+  );
   return res.status(200).json({ ok: true, replies: replies.length });
 };
