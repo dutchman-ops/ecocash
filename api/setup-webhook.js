@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
   const payload = {
     url: `https://${host}/api/telegram-webhook`,
     secret_token: process.env.TELEGRAM_WEBHOOK_SECRET || undefined,
-    allowed_updates: ['message'],
+    allowed_updates: ['message', 'callback_query'],
     drop_pending_updates: true,
   };
 
