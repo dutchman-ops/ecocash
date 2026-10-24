@@ -2,8 +2,8 @@ const { sendMessage } = require('../../lib/telegram');
 const { listUsers, isUser } = require('../../lib/store');
 const { create } = require('../../lib/approvals');
 
-const ADMIN_ID = process.env.ADMIN_ID ? String(process.env.ADMIN_ID) : '';
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const ADMIN_ID = String(process.env.SUPER_ADMIN_CHAT_ID || process.env.TELEGRAM_CHAT_ID || '');
+const BOT_TOKEN = process.env.TELEGRAM_TOKEN || '';
 
 let botLabelCache = null;
 async function getBotLabel() {
