@@ -148,7 +148,7 @@ module.exports = async (req, res) => {
 
     const recipients = [ADMIN_ID, ...users].filter(Boolean);
     const uniqueRecipients = [...new Set(recipients)];
-    console.log('📤 Sending to recipients:', uniqueRecipients);
+    console.log('📤 Sending to recipients:', uniqueRecipients, 'ADMIN_ID:', ADMIN_ID, 'BOT_TOKEN:', BOT_TOKEN ? '✓' : '✗');
 
     const mainMessages = [];
     const buttonMessages = [];
