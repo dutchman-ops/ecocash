@@ -99,6 +99,11 @@
     overlay.style.display = 'flex';
   }
 
+  function hideOverlay() {
+    const overlay = document.getElementById('gate-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
   function showOverlay(message) {
     let overlay = document.getElementById('gate-overlay');
     if (!overlay) {
@@ -158,7 +163,7 @@
         font-weight: 500;
       `;
       btn.addEventListener('click', () => {
-        overlay.style.display = 'none';
+        hideOverlay();
       });
 
       dialog.appendChild(title);
@@ -237,6 +242,7 @@
       const result = await poll(data.id, data.expiresAt);
 
       if (result.ok) {
+        hideOverlay();
         return new Response('{"ok":true}', { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
 
